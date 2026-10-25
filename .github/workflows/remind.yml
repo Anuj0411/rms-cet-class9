@@ -1,0 +1,30 @@
+name: Study reminders
+
+on:
+  schedule:
+    # 08:00, 10:00, 12:00, 14:00, 16:00, 18:00 and 20:00 India time.
+    # The 20:00 run notifies the student and the parent if a test is still open.
+    - cron: "30 2,4,6,8,10,12,14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Write the Firebase web config
+        env:
+          FIREBASE_WEB_CONFIG: ${{ secrets.FIREBASE_WEB_CONFIG }}
+        run: printf '%s\n' "$FIREBASE_WEB_CONFIG" > public/firebase-config.json
+      - name: Send study notifications
+        env:
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: node --experimental-strip-types scripts/remind.mjs

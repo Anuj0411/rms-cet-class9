@@ -1,48 +1,49 @@
 import { useState } from "react";
 import { allTopics, SUBJECT_LABEL } from "../catalog.ts";
 import { formatDay, parseISO, PLAN, todayISO, type PlanEntry } from "../plan.ts";
+import { isDone, istNow, studyLinks } from "../remind.ts";
 import { SyncLine } from "../SyncLine.tsx";
 import { getName, setName, useAttempts } from "../storage.ts";
 import { timeLeft } from "../time.ts";
 import type { Subject } from "../types.ts";
 import { langOf } from "../ui/lang.ts";
+import { Reminders } from "../ui/Reminders.tsx";
 import { TimeLeft } from "../ui/TimeLeft.tsx";
 
 const ORDER: Subject[] = ["maths", "science", "english", "hindi", "sst"];
 const TINT = ["lilac", "mint", "sun", "peach", "lilac"] as const;
 const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function destination(entry: PlanEntry) {
-  if (entry.kind === "test" && entry.testId) return `#/test/${entry.testId}`;
-  if (entry.kind === "formula") return "#/formulas";
-  if (entry.kind === "review") return "#/notes";
-  return "#/plan";
-}
+const TINTS = ["lilac", "mint", "sun", "peach"] as const;
 
-function actionLabel(entry: PlanEntry, done: boolean) {
-  if (entry.kind === "test") return done ? "Redo" : "Start";
-  if (entry.kind === "formula") return "Open";
-  if (entry.kind === "review") return "Revise";
-  return "Open";
+function TargetCard({ entry, done, tint }: { entry: PlanEntry; done: boolean; tint: (typeof TINTS)[number] }) {
+  const { notes, test } = studyLinks(entry, done);
+  return (
+    <article className={`target-card ${tint}`}>
+      <p className="learn-kicker">{entry.kind === "test" ? (done ? "Done" : "To do") : "Today"} · {entry.detail}</p>
+      <p className="learn-title" lang={langOf(entry.title)}>{entry.title}</p>
+      {notes || test ? (
+        <div className="target-actions">
+          {notes ? <a className="button ghost" href={notes.href}>{notes.label}</a> : null}
+          {test ? <a className="button" href={test.href}>{test.label}</a> : null}
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 export function Home() {
   const [name, setLocalName] = useState(getName());
   const [openSubject, setOpenSubject] = useState<Subject | null>(null);
-  const today = todayISO();
+  const today = istNow().day;
   const todayPlan = PLAN.filter((entry) => entry.date === today);
   const { attempts, sync, error } = useAttempts();
+  const stamps = attempts.map((attempt) => ({ testId: attempt.testId, submittedAt: attempt.submittedAt }));
   const done = new Set(attempts.map((attempt) => attempt.testId));
   const topics = allTopics();
   const required = PLAN.filter((entry) => entry.required && entry.testId);
   const finished = required.filter((entry) => entry.testId && done.has(entry.testId)).length;
   const percent = required.length ? Math.round((finished / required.length) * 100) : 0;
-  const hero =
-    todayPlan.find((entry) => entry.kind === "test" && entry.testId && entry.required) ??
-    todayPlan.find((entry) => entry.kind === "test" && entry.testId) ??
-    todayPlan[0] ??
-    null;
-  const also = todayPlan.filter((entry) => entry !== hero);
   const left = timeLeft(new Date());
   const weekStart = parseISO(today);
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
@@ -91,13 +92,18 @@ export function Home() {
         </section>
       ) : null}
 
-      {hero ? (
-        <a className="learn-card lilac" href={destination(hero)}>
-          <span className="learn-kicker">{formatDay(today)} · {hero.detail}</span>
-          <span className="learn-title" lang={langOf(hero.title)}>{hero.title}</span>
-          <span className="go" aria-hidden="true" />
-          <span className="learn-kicker">{hero.testId && done.has(hero.testId) ? "Done · open again" : actionLabel(hero, false)}</span>
-        </a>
+      {todayPlan.length ? (
+        <div className="stack">
+          <p className="quiet">Today's target. Read the notes, then start the test.</p>
+          {todayPlan.map((entry, index) => (
+            <TargetCard
+              key={`${entry.title}-${entry.testId ?? ""}`}
+              entry={entry}
+              done={isDone(entry, stamps, today)}
+              tint={TINTS[index % TINTS.length]}
+            />
+          ))}
+        </div>
       ) : (
         <a className="learn-card lilac" href="#/plan">
           <span className="learn-kicker">{formatDay(today)}</span>
@@ -105,18 +111,6 @@ export function Home() {
           <span className="go" aria-hidden="true" />
         </a>
       )}
-
-      {also.length > 0 ? (
-        <div className="stack">
-          {also.map((entry, index) => (
-            <a className={`learn-card ${index % 2 ? "sun" : "mint"}`} key={`${entry.title}-${entry.testId ?? ""}`} href={destination(entry)}>
-              <span className="learn-kicker">{entry.detail}</span>
-              <span className="learn-title" lang={langOf(entry.title)}>{entry.title}</span>
-              <span className="go" aria-hidden="true" />
-            </a>
-          ))}
-        </div>
-      ) : null}
 
       <section className="stat-row" aria-label="Prep snapshot">
         <div className="stat">
@@ -132,6 +126,8 @@ export function Home() {
           <span>Topics tried</span>
         </div>
       </section>
+
+      <Reminders role="student" />
 
       <TimeLeft />
 

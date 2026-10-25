@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { getRole, logout, type Role } from "./auth.ts";
 import { Home } from "./screens/Home.tsx";
-import { Formulas, Interview } from "./screens/Info.tsx";
+import { Formulas } from "./screens/Formulas.tsx";
+import { Interview } from "./screens/Info.tsx";
 import { Login } from "./screens/Login.tsx";
 import { Notes } from "./screens/Notes.tsx";
 import { Parent } from "./screens/Parent.tsx";
@@ -24,7 +25,6 @@ const NAV = [
   ["/plan", "Plan"],
   ["/notes", "Notes"],
   ["/formulas", "Sheet"],
-  ["/parent", "Scores"],
 ] as const;
 
 function current(path: string, href: string) {
@@ -43,9 +43,6 @@ function TabIcon({ name }: { name: string }) {
   if (name === "Notes") {
     return <svg {...common}><path d="M7 4h8l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" /><path d="M15 4v4h4M8 13h8M8 17h5" /></svg>;
   }
-  if (name === "Scores") {
-    return <svg {...common}><path d="M5 19V9M12 19V5M19 19v-7" /></svg>;
-  }
   return <svg {...common}><path d="M6 4h12v16H6z" /><path d="M9 8h6M9 12h6" /></svg>;
 }
 
@@ -55,6 +52,11 @@ export default function App() {
   const test = path.match(/^\/test\/([^/]+)$/);
   const review = path.match(/^\/review\/([^/]+)$/);
   const note = path.match(/^\/notes\/([^/]+)$/);
+
+  useEffect(() => {
+    if (role !== "parent" || review) return;
+    if (path !== "/" && path !== "/parent") window.location.hash = "#/";
+  }, [role, path, review]);
 
   if (!role) {
     return (
@@ -69,6 +71,32 @@ export default function App() {
     );
   }
 
+  if (role === "parent") {
+    const screen = review
+      ? <Review attemptId={decodeURIComponent(review[1])} />
+      : <Parent />;
+    return (
+      <div className="app">
+        <header className="top">
+          <div className="top-row">
+            <a className="brand" href="#/">RMS CET Class 9</a>
+            <button
+              className="logout"
+              type="button"
+              onClick={() => {
+                logout();
+                setRole(null);
+              }}
+            >
+              Log out
+            </button>
+          </div>
+        </header>
+        <main>{screen}</main>
+      </div>
+    );
+  }
+
   let screen = <Home />;
   if (test) screen = <TestScreen testId={decodeURIComponent(test[1])} />;
   else if (review) screen = <Review attemptId={decodeURIComponent(review[1])} />;
@@ -76,7 +104,7 @@ export default function App() {
   else if (note) screen = <Notes topicId={decodeURIComponent(note[1])} />;
   else if (path === "/notes") screen = <Notes />;
   else if (path === "/parent") {
-    screen = role === "parent" ? <Parent /> : (
+    screen = (
       <section className="card">
         <h1>Parent page</h1>
         <p>The scores are for your uncle. He signs in with his own code.</p>
@@ -86,7 +114,7 @@ export default function App() {
   } else if (path === "/formulas") screen = <Formulas />;
   else if (path === "/interview") screen = <Interview />;
 
-  const links = NAV.filter(([href]) => href !== "/parent" || role === "parent");
+  const links = NAV;
 
   return (
     <div className={test ? "app testing" : "app"}>

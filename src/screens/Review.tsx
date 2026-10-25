@@ -16,7 +16,7 @@ export function Review({ attemptId }: { attemptId: string }) {
             : "Submitted papers are kept in the shared score list, not on this phone. If it was just submitted, wait a moment and open the parent page."}
         </p>
         <SyncLine sync={sync} error={error} />
-        <a className="button block" href="#/">Home</a>
+        <a className="button block" href="#/">Back</a>
       </section>
     );
   }

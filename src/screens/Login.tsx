@@ -19,7 +19,7 @@ export function Login({ onSuccess }: { onSuccess: (role: Role) => void }) {
       </div>
       <section className="card">
         <h1>Start today</h1>
-        <p className="lede">This page is only for the student and the parent. Pick who you are, then enter the code.</p>
+        <p className="lede">Student opens today's work. Parent opens the progress report.</p>
         <div className="who" role="group" aria-label="Who is signing in">
           <button type="button" aria-pressed={role === "student"} onClick={() => setRole("student")}>
             Student

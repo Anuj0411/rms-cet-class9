@@ -86,6 +86,19 @@ export function setName(name: string) {
   localStorage.setItem(NAME, name.trim());
 }
 
+export async function savePushSubscription(role: "student" | "parent", subscription: PushSubscription) {
+  const json = subscription.toJSON();
+  const endpoint = json.endpoint;
+  const p256dh = json.keys?.p256dh;
+  const auth = json.keys?.auth;
+  if (!endpoint || !p256dh || !auth) throw new Error("This browser did not return a reminder subscription.");
+  const db = await firebaseDb();
+  if (!db) throw new Error("Reminders are not connected yet.");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint));
+  const id = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 40);
+  await setDoc(doc(db, "rmsPush", id), { id, role, endpoint, p256dh, auth });
+}
+
 export async function saveAttempt(attempt: Attempt) {
   const db = await firebaseDb();
   if (!db) {
