@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { resolveTest, splitScore, SUBJECT_LABEL, topicById } from "../catalog.ts";
 import { PAPER_BRIEF, TOPIC_NOTES } from "../notes/index.ts";
-import { getLive, getName, saveAttempt, setLive, useAttempts } from "../storage.ts";
+import { getLive, getName, saveAttempt, setLive, setName, useAttempts } from "../storage.ts";
 import type { LiveTest, Subject } from "../types.ts";
 import { langOf } from "../ui/lang.ts";
 import { NotesList } from "../ui/NotesList.tsx";
@@ -33,6 +33,8 @@ export function TestScreen({ testId }: { testId: string }) {
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(false);
+  const [studentName, setStudentName] = useState(() => getName().trim());
+  const [draftName, setDraftName] = useState("");
   const submitted = useRef(false);
 
   useEffect(() => {
@@ -144,16 +146,6 @@ export function TestScreen({ testId }: { testId: string }) {
     );
   }
 
-  if (!getName()) {
-    return (
-      <section className="card">
-        <h1>Add your name first</h1>
-        <p>Go back home and type your name. Your uncle's report uses that name.</p>
-        <a className="button block" href="#/">Go home</a>
-      </section>
-    );
-  }
-
   if (!live.started) {
     const ownNotes = TOPIC_NOTES[test.id];
     const bySubject = new Map<Subject, { id: string; title: string }[]>();
@@ -212,22 +204,40 @@ export function TestScreen({ testId }: { testId: string }) {
           </>
         ) : (
           <>
-            <label className="read-check">
-              <input
-                type="checkbox"
-                checked={ready}
-                onChange={(event) => setReady(event.target.checked)}
-              />
-              <span>I have read the notes</span>
-            </label>
-            <button
-              className="button block"
-              type="button"
-              disabled={!ready}
-              onClick={() => commit({ ...live, started: true, startedAt: Date.now(), tickAt: Date.now() })}
+            <form
+              onSubmit={(event: FormEvent) => {
+                event.preventDefault();
+                const trimmed = (studentName || draftName).trim();
+                if (!trimmed || !ready) return;
+                setName(trimmed);
+                setStudentName(trimmed);
+                commit({ ...live, started: true, startedAt: Date.now(), tickAt: Date.now() });
+              }}
             >
-              Start test
-            </button>
+              {studentName ? null : (
+                <label className="field">
+                  Your name
+                  <input
+                    value={draftName}
+                    onChange={(event) => setDraftName(event.target.value)}
+                    placeholder="Name used on the report"
+                    autoComplete="name"
+                    autoFocus
+                  />
+                </label>
+              )}
+              <label className="read-check">
+                <input
+                  type="checkbox"
+                  checked={ready}
+                  onChange={(event) => setReady(event.target.checked)}
+                />
+                <span>I have read the notes</span>
+              </label>
+              <button className="button block" type="submit" disabled={!ready || !(studentName || draftName).trim()}>
+                Start test
+              </button>
+            </form>
           </>
         )}
       </section>
