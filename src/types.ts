@@ -62,6 +62,22 @@ export type Attempt = {
   answers: AnswerRecord[];
 };
 
+export type PaperReset = {
+  id: string;
+  kind: "attempt" | "live";
+  testId: string;
+  attemptId?: string;
+  at: number;
+};
+
+export type OpenPaper = {
+  id: "current";
+  testId: string;
+  title: string;
+  startedAt: number;
+  open: boolean;
+};
+
 export type LiveTest = {
   testId: string;
   started: boolean;

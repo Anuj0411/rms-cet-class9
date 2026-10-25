@@ -2,8 +2,9 @@ import { allTopics, SUBJECT_LABEL, topicAccuracy } from "../catalog.ts";
 import { formatDay, PLAN } from "../plan.ts";
 import { isDone, istNow, type AttemptStamp } from "../remind.ts";
 import { SyncLine } from "../SyncLine.tsx";
-import { useAttempts } from "../storage.ts";
-import type { Attempt, Subject } from "../types.ts";
+import { useState } from "react";
+import { resetAttempt, resetOpenPaper, useAttempts, useOpenPaper } from "../storage.ts";
+import type { Attempt, OpenPaper, Subject } from "../types.ts";
 import { langOf } from "../ui/lang.ts";
 import { timeLeft } from "../time.ts";
 import { Reminders } from "../ui/Reminders.tsx";
@@ -12,6 +13,14 @@ const ORDER: Subject[] = ["maths", "science", "english", "hindi", "sst"];
 
 export function Parent() {
   const { attempts, sync, error } = useAttempts();
+  const { paper: openPaper, ready: openReady } = useOpenPaper();
+  const [pending, setPending] = useState<
+    | { kind: "attempt"; attempt: Attempt }
+    | { kind: "live"; paper: OpenPaper }
+    | null
+  >(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
   const today = istNow().day;
   const stamps: AttemptStamp[] = attempts.map((attempt) => ({ testId: attempt.testId, submittedAt: attempt.submittedAt }));
   const required = PLAN.filter((entry) => entry.required && entry.kind === "test" && entry.testId);
@@ -27,6 +36,22 @@ export function Parent() {
   const mocks = attempts.filter((attempt) => attempt.testId.startsWith("mock-")).sort((a, b) => b.submittedAt - a.submittedAt);
   const recent = [...attempts].sort((a, b) => b.submittedAt - a.submittedAt).slice(0, 8);
   const name = attempts[0]?.studentName;
+  const open = openPaper?.open ? openPaper : null;
+
+  async function confirmReset() {
+    if (!pending) return;
+    setResetting(true);
+    setResetError("");
+    try {
+      if (pending.kind === "attempt") await resetAttempt(pending.attempt);
+      else await resetOpenPaper(pending.paper);
+      setPending(null);
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : "Could not reset that paper.");
+    } finally {
+      setResetting(false);
+    }
+  }
 
   return (
     <div className="stack">
@@ -131,6 +156,28 @@ export function Parent() {
       </section>
 
       <section className="card">
+        <h2>Open paper</h2>
+        {!openReady ? <p className="quiet">Checking his phone.</p> : open ? (
+          <>
+            <p lang={langOf(open.title)}>{open.title} is open on his phone.</p>
+            <p className="quiet">Started {new Date(open.startedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}.</p>
+            <button
+              className="button ghost block"
+              type="button"
+              onClick={() => {
+                setResetError("");
+                setPending({ kind: "live", paper: open });
+              }}
+            >
+              Reset this open paper
+            </button>
+          </>
+        ) : (
+          <p>No paper is open on his phone. A paper he starts shows here, so you can clear it if it was opened by mistake.</p>
+        )}
+      </section>
+
+      <section className="card">
         <h2>Mock papers</h2>
         {mocks.length === 0 ? <p>No full mock yet. Paper 1 and Paper 2 each need 50%.</p> : mocks.map((attempt) => (
           <div key={attempt.id} className="mock-row">
@@ -140,15 +187,47 @@ export function Parent() {
               <Qualify label="Paper 1" score={attempt.paper1Score} total={attempt.paper1Total} />
               <Qualify label="Paper 2" score={attempt.paper2Score} total={attempt.paper2Total} />
             </div>
-            <a className="button ghost" href={`#/review/${attempt.id}`}>See the answers</a>
+            <div className="row-actions">
+              <a className="button ghost" href={`#/review/${attempt.id}`}>See the answers</a>
+              <button className="text-reset" type="button" onClick={() => { setResetError(""); setPending({ kind: "attempt", attempt }); }}>
+                Reset
+              </button>
+            </div>
           </div>
         ))}
       </section>
 
       <section className="card">
         <h2>Recent tests</h2>
-        <AttemptList attempts={recent} />
+        <AttemptList
+          attempts={recent}
+          onReset={(attempt) => {
+            setResetError("");
+            setPending({ kind: "attempt", attempt });
+          }}
+        />
       </section>
+      {pending ? (
+        <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+          <div className="card sheet-card">
+            <h2 id="reset-title">{pending.kind === "live" ? "Reset the open paper?" : "Reset this paper?"}</h2>
+            <p>
+              {pending.kind === "live"
+                ? `${pending.paper.title} is open on his phone. Resetting it clears that sitting. He can start it again. Submitted scores stay.`
+                : `${pending.attempt.testTitle} comes off the score list. He can take it again. His other papers stay.`}
+            </p>
+            {resetError ? <p className="note">{resetError}</p> : null}
+            <div className="stack tight">
+              <button type="button" className="button ghost block" onClick={() => setPending(null)} disabled={resetting}>
+                Keep it
+              </button>
+              <button type="button" className="button block" onClick={() => void confirmReset()} disabled={resetting}>
+                {resetting ? "Resetting" : "Reset paper"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -166,7 +245,7 @@ function Qualify({ label, score, total }: { label: string; score: number | null;
   );
 }
 
-function AttemptList({ attempts }: { attempts: Attempt[] }) {
+function AttemptList({ attempts, onReset }: { attempts: Attempt[]; onReset: (attempt: Attempt) => void }) {
   if (attempts.length === 0) return <p>No test has been submitted yet.</p>;
   return (
     <ul className="remain-list">
@@ -179,7 +258,10 @@ function AttemptList({ attempts }: { attempts: Attempt[] }) {
               {attempt.total ? ` · ${Math.round((attempt.score / attempt.total) * 100)}%` : ""}
             </small>
           </span>
-          <a href={`#/review/${attempt.id}`}>Answers</a>
+          <span className="row-actions">
+            <a href={`#/review/${attempt.id}`}>Answers</a>
+            <button className="text-reset" type="button" onClick={() => onReset(attempt)}>Reset</button>
+          </span>
         </li>
       ))}
     </ul>

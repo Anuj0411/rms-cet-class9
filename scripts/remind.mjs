@@ -23,9 +23,22 @@ function value(field) {
   return field?.stringValue ?? field?.integerValue ?? field?.doubleValue ?? "";
 }
 
-function attempts(docs) {
+function voidedAttemptIds(docs) {
+  const ids = new Set();
+  for (const document of docs) {
+    const fields = document.fields ?? {};
+    if (value(fields.kind) !== "attempt") continue;
+    const attemptId = value(fields.attemptId);
+    if (attemptId) ids.add(attemptId);
+  }
+  return ids;
+}
+
+function attempts(docs, voided) {
   return docs.flatMap((document) => {
     const fields = document.fields ?? {};
+    const id = value(fields.id);
+    if (id && voided.has(id)) return [];
     const testId = value(fields.testId);
     const submitted = value(fields.submittedAt);
     return testId && submitted ? [{ testId, submittedAt: Number(submitted) }] : [];
@@ -52,7 +65,13 @@ if (!config.apiKey || !config.projectId) {
 
 const { day, hour } = istNow();
 const missed = hour >= 20;
-const saved = attempts(await documents(config, "rmsAttempts"));
+let voided = new Set();
+try {
+  voided = voidedAttemptIds(await documents(config, "rmsResets"));
+} catch {
+  console.log("Reset list was not read. Submitted papers are still counted.");
+}
+const saved = attempts(await documents(config, "rmsAttempts"), voided);
 const notice = missed ? missedNotice(day, saved) : reminderNotice(day, saved);
 if (!notice) {
   console.log(missed ? "Nothing was missed today." : "Today's tests are done, or nothing is scheduled.");

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { resolveTest, splitScore, SUBJECT_LABEL, topicById } from "../catalog.ts";
 import { PAPER_BRIEF, TOPIC_NOTES } from "../notes/index.ts";
-import { getLive, getName, saveAttempt, setLive, setName, useAttempts } from "../storage.ts";
+import { getLive, getName, saveAttempt, saveOpenPaper, setLive, setName, useAttempts, usePaperResets } from "../storage.ts";
 import type { LiveTest, Subject } from "../types.ts";
 import { langOf } from "../ui/lang.ts";
 import { NotesList } from "../ui/NotesList.tsx";
@@ -26,8 +26,10 @@ function clock(seconds: number) {
 
 export function TestScreen({ testId }: { testId: string }) {
   const { attempts } = useAttempts();
+  const { resets, ready: resetsReady } = usePaperResets();
   const test = resolveTest(testId, attempts);
   const [live, setLocal] = useState<LiveTest | null>(null);
+  const [resetNote, setResetNote] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [saveError, setSaveError] = useState("");
@@ -40,12 +42,27 @@ export function TestScreen({ testId }: { testId: string }) {
   useEffect(() => {
     submitted.current = false;
     setReady(false);
+    setResetNote(false);
   }, [testId]);
 
   useEffect(() => {
     const current = resolveTest(testId, attempts);
     if (!current) return;
     const saved = getLive();
+    const blocked = resetsReady && !!saved?.started && resets.some((item) => item.kind === "live" && item.testId === testId && item.at > saved.startedAt);
+    if (blocked && saved) {
+      setLive(null);
+      setLocal(null);
+      setResetNote(true);
+      void saveOpenPaper({
+        testId,
+        title: current.title,
+        startedAt: saved.startedAt,
+        open: false,
+      }).catch(() => {});
+      return;
+    }
+    if (!resetsReady) return;
     if (saved?.testId === testId && saved.started && saved.chosen.length === current.questions.length) {
       setLocal(saved);
       setLive(saved);
@@ -56,7 +73,19 @@ export function TestScreen({ testId }: { testId: string }) {
       : blank(testId, current.questions.length);
     setLocal(next);
     setLive(next);
-  }, [testId, attempts]);
+  }, [testId, attempts, resets, resetsReady]);
+
+  useEffect(() => {
+    if (!resetsReady || !test || !live?.started) return;
+    const blocked = resets.some((item) => item.kind === "live" && item.testId === test.id && item.at > live.startedAt);
+    if (blocked) return;
+    void saveOpenPaper({
+      testId: test.id,
+      title: test.title,
+      startedAt: live.startedAt,
+      open: true,
+    }).catch(() => {});
+  }, [resetsReady, test?.id, test?.title, live?.started, live?.startedAt, resets]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -112,6 +141,7 @@ export function TestScreen({ testId }: { testId: string }) {
     try {
       await saveAttempt(attempt);
       setLive(null);
+      await saveOpenPaper({ testId: test.id, title: test.title, startedAt, open: false }).catch(() => {});
       window.location.hash = `#/review/${attempt.id}`;
     } catch (err) {
       submitted.current = false;
@@ -133,6 +163,27 @@ export function TestScreen({ testId }: { testId: string }) {
         <h1>That test is not on the plan</h1>
         <p>Go home and pick a topic from the list.</p>
         <a className="button block" href="#/">Back home</a>
+      </section>
+    );
+  }
+
+  if (resetNote && test) {
+    return (
+      <section className="card">
+        <h1>This paper was reset</h1>
+        <p>The answers from this sitting are cleared. You can read the notes and start {test.title} again.</p>
+        <button
+          className="button block"
+          type="button"
+          onClick={() => {
+            const next = blank(test.id, test.questions.length);
+            setLocal(next);
+            setLive(next);
+            setResetNote(false);
+          }}
+        >
+          Start again
+        </button>
       </section>
     );
   }
