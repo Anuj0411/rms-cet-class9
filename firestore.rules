@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rmsAttempts/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.id == id
+        && request.resource.data.studentName is string
+        && request.resource.data.studentName.size() > 0
+        && request.resource.data.studentName.size() < 60
+        && request.resource.data.testId is string
+        && request.resource.data.testTitle is string
+        && request.resource.data.score is int
+        && request.resource.data.total is int
+        && request.resource.data.total > 0
+        && request.resource.data.total <= 200
+        && request.resource.data.answers is list
+        && request.resource.data.answers.size() == request.resource.data.total
+        && request.resource.data.answers.size() <= 200;
+      allow update, delete: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
