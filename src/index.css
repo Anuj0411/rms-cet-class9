@@ -942,10 +942,10 @@ input, textarea {
 }
 
 .qualify-tile {
-  border-radius: 14px;
+  border-radius: 22px;
   padding: 14px;
   background: #fff;
-  border: 1.5px solid var(--line);
+  border: 0;
 }
 
 .qualify-tile p { margin: 0; }
@@ -976,12 +976,14 @@ input, textarea {
 
 .mock-row {
   display: grid;
-  gap: 8px;
-  padding: 14px 0;
-  border-top: 1px solid var(--line);
+  gap: 10px;
+  margin-top: 10px;
+  padding: 16px;
+  border-radius: 22px;
+  background: #ebe4fb;
 }
 
-.mock-row.latest { padding-top: 4px; border-top: 0; }
+.mock-row.latest { margin-top: 0; }
 
 .weak-row { align-items: center; }
 
@@ -998,6 +1000,12 @@ input, textarea {
 
 .weak-copy small { color: var(--muted); }
 
+.weak-list .weak-row {
+  border: 0;
+  border-radius: 22px;
+  background: #ffe4d8;
+}
+
 .remain-list {
   list-style: none;
   margin: 0;
@@ -1011,10 +1019,16 @@ input, textarea {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #f6f3fb;
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: #ebe4fb;
 }
+
+.remain-list li:nth-child(4n + 2) { background: #e5f6ee; }
+
+.remain-list li:nth-child(4n + 3) { background: #fff1c2; }
+
+.remain-list li:nth-child(4n) { background: #ffe4d8; }
 
 .remain-list span {
   min-width: 0;
@@ -1041,11 +1055,14 @@ input, textarea {
 
 .text-reset {
   border: 0;
-  background: transparent;
-  color: var(--bad);
+  background: #fff;
+  color: var(--ink);
   font: inherit;
   font-weight: 500;
-  padding: 8px 2px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(36, 32, 58, 0.08);
   cursor: pointer;
 }
 
