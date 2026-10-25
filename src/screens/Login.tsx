@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { login, type Role } from "../auth.ts";
-import { TimeLeft } from "../ui/TimeLeft.tsx";
 
 export function Login({ onSuccess }: { onSuccess: (role: Role) => void }) {
   const [role, setRole] = useState<Role>("student");
@@ -9,10 +8,17 @@ export function Login({ onSuccess }: { onSuccess: (role: Role) => void }) {
 
   return (
     <div className="stack">
-      <TimeLeft />
+      <div className="welcome-art" aria-hidden="true">
+        <svg width="220" height="150" viewBox="0 0 220 150" fill="none">
+          <rect x="46" y="78" width="128" height="28" rx="6" fill="#6d4db5" />
+          <rect x="58" y="52" width="104" height="26" rx="6" fill="#c4b3ef" />
+          <rect x="70" y="28" width="80" height="24" rx="6" fill="#ffe08a" />
+          <rect x="148" y="36" width="14" height="78" rx="4" transform="rotate(18 148 36)" fill="#f0a35a" />
+          <path d="M28 124h164" stroke="#1c1c1e" strokeWidth="4" strokeLinecap="round" />
+        </svg>
+      </div>
       <section className="card">
-        <p className="eyebrow">Closed</p>
-        <h1>Sign in</h1>
+        <h1>Start today</h1>
         <p className="lede">This page is only for the student and the parent. Pick who you are, then enter the code.</p>
         <div className="who" role="group" aria-label="Who is signing in">
           <button type="button" aria-pressed={role === "student"} onClick={() => setRole("student")}>

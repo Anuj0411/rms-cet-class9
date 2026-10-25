@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { formatDay, PLAN, todayISO, WEEKS } from "../plan.ts";
+import { useEffect, useState } from "react";
+import { formatDay, parseISO, PLAN, todayISO, WEEKS } from "../plan.ts";
 import { useAttempts } from "../storage.ts";
 import { langOf } from "../ui/lang.ts";
 
@@ -7,6 +7,7 @@ export function PlanScreen() {
   const { attempts } = useAttempts();
   const done = new Set(attempts.map((attempt) => attempt.testId));
   const today = todayISO();
+  const [picked, setPicked] = useState(today);
   useEffect(() => {
     const openAll = () => {
       document.querySelectorAll("details.fold").forEach((item) => item.setAttribute("open", ""));
@@ -30,6 +31,8 @@ export function PlanScreen() {
           Print this plan
         </button>
       </section>
+      <Month picked={picked} today={today} onPick={setPicked} />
+      <DayList date={picked} done={done} />
       {WEEKS.map((week) => (
         <details className="fold week" key={week.start} name="weeks" open={today >= week.start && today <= week.end}>
           <summary>{week.title}</summary>
@@ -58,5 +61,76 @@ export function PlanScreen() {
         <p>Reach the centre early. No watch, no phone, no calculator. Attempt every bubble. Paper 1 and Paper 2 are both out of 100, and each needs 50.</p>
       </section>
     </div>
+  );
+}
+
+const DOW = ["M", "T", "W", "T", "F", "S", "S"];
+
+function Month({ picked, today, onPick }: { picked: string; today: string; onPick: (iso: string) => void }) {
+  const [cursor, setCursor] = useState(() => parseISO(today));
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const first = new Date(year, month, 1);
+  const startPad = (first.getDay() + 6) % 7;
+  const days = new Date(year, month + 1, 0).getDate();
+  const cells: Array<string | null> = [
+    ...Array.from({ length: startPad }, () => null),
+    ...Array.from({ length: days }, (_, index) => {
+      const day = String(index + 1).padStart(2, "0");
+      const monthText = String(month + 1).padStart(2, "0");
+      return `${year}-${monthText}-${day}`;
+    }),
+  ];
+  const label = first.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  return (
+    <section className="card">
+      <div className="cal-head">
+        <button type="button" aria-label="Previous month" onClick={() => setCursor(new Date(year, month - 1, 1))}>‹</button>
+        <strong>{label}</strong>
+        <button type="button" aria-label="Next month" onClick={() => setCursor(new Date(year, month + 1, 1))}>›</button>
+      </div>
+      <div className="calendar">
+        {DOW.map((name, index) => <span className="dow" key={`${name}-${index}`}>{name}</span>)}
+        {cells.map((iso, index) => iso ? (
+          <button
+            key={iso}
+            type="button"
+            className={[
+              iso === picked ? "on" : "",
+              iso === "2026-12-13" ? "exam" : "",
+              PLAN.some((entry) => entry.date === iso) ? "has" : "",
+            ].filter(Boolean).join(" ")}
+            onClick={() => onPick(iso)}
+          >
+            {Number(iso.slice(-2))}
+          </button>
+        ) : <span key={`pad-${index}`} />)}
+      </div>
+    </section>
+  );
+}
+
+function DayList({ date, done }: { date: string; done: Set<string> }) {
+  const items = PLAN.filter((entry) => entry.date === date);
+  return (
+    <section className="card">
+      <h2>{formatDay(date)}</h2>
+      {items.length === 0 ? <p className="quiet">Nothing is scheduled this day.</p> : (
+        <ul className="plan-list">
+          {items.map((entry) => (
+            <li key={`${entry.title}-${entry.testId ?? ""}`}>
+              <div>
+                <strong lang={langOf(entry.title)}>{entry.title}</strong>
+                <span>{entry.detail}{entry.required ? " · required" : ""}</span>
+              </div>
+              {entry.kind === "test" && entry.testId ? (
+                <a className="button" href={`#/test/${entry.testId}`}>{done.has(entry.testId) ? "Done" : "Open"}</a>
+              ) : null}
+              {entry.kind === "formula" ? <a className="button" href="#/formulas">Sheet</a> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

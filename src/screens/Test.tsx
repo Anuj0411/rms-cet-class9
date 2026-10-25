@@ -172,12 +172,13 @@ export function TestScreen({ testId }: { testId: string }) {
     const subjectOrder: Subject[] = ["maths", "science", "english", "hindi", "sst"];
     return (
       <section className="card concept">
+        <a className="back" href="#/">Back</a>
         <p className="eyebrow">{ownNotes ? "Read this, then start" : "Before you start"}</p>
         <h1 lang={langOf(test.title)}>{test.title}</h1>
         {ownNotes ? (
           <>
-            <p className="lede">Read every point. Tick the box at the end, then start.</p>
-            <NotesList bits={ownNotes} />
+            <p className="lede">The bold line is the rule. Read the picture and the example under it, then tick the box.</p>
+            <NotesList bits={ownNotes} topicId={test.id} />
           </>
         ) : (
           <>
@@ -191,7 +192,7 @@ export function TestScreen({ testId }: { testId: string }) {
                 {bySubject.get(subject)?.map((topic) => (
                   <details key={topic.id} className="fold inner">
                     <summary lang={langOf(topic.title)}>{topic.title}</summary>
-                    <NotesList bits={TOPIC_NOTES[topic.id]} />
+                    <NotesList bits={TOPIC_NOTES[topic.id]} topicId={topic.id} />
                   </details>
                 ))}
               </details>

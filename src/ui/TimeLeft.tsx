@@ -31,7 +31,8 @@ export function TimeLeft() {
 
   return (
     <section className="card time-card" aria-label="Time left before the paper">
-      <p className="eyebrow">Time left · 13 December, 9:00</p>
+      <h2>Time left</h2>
+      <p className="quiet">13 December, 9:00</p>
       <div className="time-grid">
         {units.map(([value, label]) => (
           <div className="time-unit" key={label}>
