@@ -31,6 +31,8 @@ export type TestView = {
   strict: boolean;
   concept: string;
   ncert?: string;
+  adaptive?: boolean;
+  ask?: number;
   questions: Question[];
 };
 
@@ -87,4 +89,5 @@ export type LiveTest = {
   flags: boolean[];
   seconds: number[];
   tickAt: number;
+  order?: number[];
 };

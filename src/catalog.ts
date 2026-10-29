@@ -43,8 +43,10 @@ function view(
   concept: string,
   questions: Question[],
   ncert?: string,
+  adaptive = false,
+  ask?: number,
 ): TestView {
-  return { id, title, kind, minutes, strict, concept, questions, ncert };
+  return { id, title, kind, minutes, strict, concept, questions, ncert, adaptive, ask };
 }
 
 function halfPaper(id: string, title: string, start: string, end: string): TestView {
@@ -96,6 +98,8 @@ function missedQuestions(attempts: Attempt[]) {
 export function resolveTest(id: string, attempts: Attempt[]): TestView | null {
   const topic = topicById(id);
   if (topic) {
+    const ask = Math.min(topic.testSize, topic.questions.length);
+    const adaptive = ask >= 3 && topic.questions.length >= 3;
     return view(
       topic.id,
       topic.title,
@@ -103,8 +107,10 @@ export function resolveTest(id: string, attempts: Attempt[]): TestView | null {
       topic.minutes,
       false,
       topic.concept,
-      topic.questions.slice(0, topic.testSize),
+      adaptive ? topic.questions : topic.questions.slice(0, ask),
       topic.ncert,
+      adaptive,
+      ask,
     );
   }
   const mock = mocks.find((paper) => paper.id === id);

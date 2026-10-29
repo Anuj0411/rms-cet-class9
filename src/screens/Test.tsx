@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { askCount, coachLine, extendLive, freshLive, liveFits, sameLive } from "../adapt.ts";
 import { resolveTest, splitScore, SUBJECT_LABEL, topicById } from "../catalog.ts";
 import { PAPER_BRIEF, TOPIC_NOTES } from "../notes/index.ts";
 import { getLive, getName, saveAttempt, saveOpenPaper, setLive, setName, useAttempts, usePaperResets } from "../storage.ts";
@@ -6,22 +7,19 @@ import type { LiveTest, Subject } from "../types.ts";
 import { langOf } from "../ui/lang.ts";
 import { NotesList } from "../ui/NotesList.tsx";
 
-function blank(testId: string, count: number): LiveTest {
-  return {
-    testId,
-    started: false,
-    startedAt: 0,
-    index: 0,
-    chosen: Array.from({ length: count }, () => null),
-    flags: Array.from({ length: count }, () => false),
-    seconds: Array.from({ length: count }, () => 0),
-    tickAt: Date.now(),
-  };
-}
-
 function clock(seconds: number) {
   const safe = Math.max(seconds, 0);
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function sittingNote(subject: string | undefined) {
+  if (subject === "maths") {
+    return "Easy sums are left out. These are the kind of questions the entrance paper asks. A right answer is followed by a tougher one. A wrong answer stays with another solid one. Nothing is marked until you submit.";
+  }
+  if (subject === "english") {
+    return "A short rule sits above each question. Use it, then choose. Two right answers in a row bring a harder question. One wrong answer brings an easier one. Nothing is marked until you submit.";
+  }
+  return "Each answer is checked inside the paper. A right answer is followed by a tougher question. A wrong answer is followed by an easier one. Nothing is marked until you submit.";
 }
 
 export function TestScreen({ testId }: { testId: string }) {
@@ -35,9 +33,20 @@ export function TestScreen({ testId }: { testId: string }) {
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(false);
-  const [studentName, setStudentName] = useState(() => getName().trim());
-  const [draftName, setDraftName] = useState("");
+  const [studentName, setStudentName] = useState(() => {
+    const saved = getName().trim();
+    return saved.length > 1 ? saved : "";
+  });
+  const [draftName, setDraftName] = useState(() => {
+    const saved = getName().trim();
+    return saved.length > 1 ? "" : saved;
+  });
   const submitted = useRef(false);
+  const attemptsRef = useRef(attempts);
+  attemptsRef.current = attempts;
+  const attemptKey = attempts.map((item) => item.id).join("|");
+  const liveRef = useRef(live);
+  liveRef.current = live;
 
   useEffect(() => {
     submitted.current = false;
@@ -46,7 +55,7 @@ export function TestScreen({ testId }: { testId: string }) {
   }, [testId]);
 
   useEffect(() => {
-    const current = resolveTest(testId, attempts);
+    const current = resolveTest(testId, attemptsRef.current);
     if (!current) return;
     const saved = getLive();
     const blocked = resetsReady && !!saved?.started && resets.some((item) => item.kind === "live" && item.testId === testId && item.at > saved.startedAt);
@@ -63,17 +72,16 @@ export function TestScreen({ testId }: { testId: string }) {
       return;
     }
     if (!resetsReady) return;
-    if (saved?.testId === testId && saved.started && saved.chosen.length === current.questions.length) {
-      setLocal(saved);
-      setLive(saved);
+    const now = liveRef.current;
+    if (saved?.testId === testId && liveFits(saved, current)) {
+      if (!sameLive(now, saved)) setLocal(saved);
       return;
     }
-    const next = saved && saved.testId === testId && saved.chosen.length === current.questions.length
-      ? saved
-      : blank(testId, current.questions.length);
+    if (now?.testId === testId && liveFits(now, current)) return;
+    const next = freshLive(current);
     setLocal(next);
     setLive(next);
-  }, [testId, attempts, resets, resetsReady]);
+  }, [testId, attemptKey, resets, resetsReady]);
 
   useEffect(() => {
     if (!resetsReady || !test || !live?.started) return;
@@ -110,8 +118,9 @@ export function TestScreen({ testId }: { testId: string }) {
     setSaving(true);
     setSaveError("");
     const finalLive = flush(current);
+    const asked = finalLive.order ? finalLive.order.map((index) => test.questions[index]) : test.questions;
     const chosen = finalLive.chosen;
-    const scored = splitScore(test.questions, chosen);
+    const scored = splitScore(asked, chosen);
     const submittedAt = Date.now();
     const startedAt = finalLive.startedAt || submittedAt;
     const attempt = {
@@ -128,7 +137,7 @@ export function TestScreen({ testId }: { testId: string }) {
       paper1Total: scored.paper1Total || null,
       paper2Score: scored.paper2Total ? scored.paper2Score : null,
       paper2Total: scored.paper2Total || null,
-      answers: test.questions.map((question, index) => ({
+      answers: asked.map((question, index) => ({
         questionId: question.id,
         topicId: question.topicId,
         subject: question.subject,
@@ -176,7 +185,7 @@ export function TestScreen({ testId }: { testId: string }) {
           className="button block"
           type="button"
           onClick={() => {
-            const next = blank(test.id, test.questions.length);
+            const next = freshLive(test);
             setLocal(next);
             setLive(next);
             setResetNote(false);
@@ -245,9 +254,12 @@ export function TestScreen({ testId }: { testId: string }) {
         )}
         {test.ncert ? <p className="ncert">If you score under half, reread {test.ncert}.</p> : null}
         <p className="meta">
-          {test.questions.length} questions · {test.minutes} min
+          {askCount(test)} questions · {test.minutes} min
           {test.strict ? " · the paper submits itself when time ends" : " · you can finish after the suggested time"}
         </p>
+        {test.adaptive ? (
+          <p className="quiet">{sittingNote(test.questions[0]?.subject)}</p>
+        ) : null}
         {test.questions.length === 0 ? (
           <>
             <p>This set has no questions yet. Go home and pick another topic.</p>
@@ -296,12 +308,17 @@ export function TestScreen({ testId }: { testId: string }) {
   }
 
   const session = live;
-  const question = test.questions[session.index];
+  const total = askCount(test);
+  const poolIndex = session.order ? session.order[session.index] : session.index;
+  const question = test.questions[poolIndex];
   const elapsed = Math.floor((now - session.startedAt) / 1000);
   const limit = test.minutes * 60;
   const left = Math.min(limit, limit - elapsed);
   const answered = session.chosen.filter((choice) => choice !== null).length;
   const flagged = session.flags.filter(Boolean).length;
+  const ahead = test.adaptive ? total - (session.order?.length ?? 0) : total - answered;
+  const atEnd = test.adaptive ? (session.order?.length ?? 0) >= total && session.index >= total - 1 : session.index >= total - 1;
+  const slots = session.order ?? test.questions.map((_, index) => index);
 
   function choose(option: number) {
     const chosen = [...session.chosen];
@@ -313,14 +330,39 @@ export function TestScreen({ testId }: { testId: string }) {
     commit({ ...flush(session), index });
   }
 
+  function forward() {
+    if (!test) return;
+    const current = flush(session);
+    if (test.adaptive && current.order && current.index === current.order.length - 1) {
+      const grown = extendLive(current, test.questions, total);
+      if (grown) {
+        commit(grown);
+        return;
+      }
+    }
+    commit({ ...current, index: current.index + 1 });
+  }
+
+  if (!question) {
+    return (
+      <section className="card">
+        <h1>This question is missing</h1>
+        <p>Go home and start the topic again.</p>
+        <a className="button block" href="#/">Back home</a>
+      </section>
+    );
+  }
+
+  const coach = coachLine(question);
+
   return (
     <section className="test">
       <header className="test-chrome">
         <div>
           <p className="eyebrow" lang={langOf(test.title)}>{test.title}</p>
-          <p className="q-label">Question {session.index + 1} of {test.questions.length}</p>
+          <p className="q-label">Question {session.index + 1} of {total}</p>
           <p className="progress-line">
-            {answered} answered · {test.questions.length - answered} blank
+            {answered} answered · {test.adaptive ? `${ahead} still ahead` : `${ahead} blank`}
             {flagged ? ` · ${flagged} flagged` : ""}
           </p>
         </div>
@@ -335,6 +377,9 @@ export function TestScreen({ testId }: { testId: string }) {
         <p className="note">The suggested time is over. Finish the ones you skipped, then submit.</p>
       ) : null}
       <article className="card question">
+        {coach ? (
+          <p className="coach"><strong>Use this rule</strong>{coach}</p>
+        ) : null}
         <p className="stem" lang={langOf(question.stem)}>{question.stem}</p>
         <div className="options">
           {question.options.map((option, index) => (
@@ -352,13 +397,14 @@ export function TestScreen({ testId }: { testId: string }) {
         </div>
       </article>
       <details className="fold">
-        <summary>Jump to a question · {answered}/{test.questions.length}</summary>
+        <summary>{test.adaptive ? "Questions so far" : "Jump to a question"} · {answered}/{test.adaptive ? session.order?.length ?? 0 : total}</summary>
         <div className="omr" aria-label="Question palette">
-          {test.questions.map((item, index) => {
+          {slots.map((itemIndex, index) => {
+            const item = test.questions[itemIndex];
             const state = index === session.index ? "now" : session.flags[index] ? "flag" : session.chosen[index] !== null ? "done" : "open";
             return (
               <button
-                key={item.id}
+                key={item?.id ?? index}
                 type="button"
                 className={`bubble ${state}`}
                 aria-current={index === session.index ? "true" : undefined}
@@ -391,13 +437,13 @@ export function TestScreen({ testId }: { testId: string }) {
         <button type="button" className="button ghost" disabled={session.index === 0} onClick={() => jump(session.index - 1)}>
           Previous
         </button>
-        {session.index < test.questions.length - 1 ? (
-          <button type="button" className="button grow" onClick={() => jump(session.index + 1)}>
-            Next
-          </button>
-        ) : (
+        {atEnd ? (
           <button type="button" className="button grow" onClick={() => setConfirm(true)}>
             Submit
+          </button>
+        ) : (
+          <button type="button" className="button grow" onClick={forward}>
+            Next
           </button>
         )}
       </div>
@@ -406,7 +452,7 @@ export function TestScreen({ testId }: { testId: string }) {
           <div className="card sheet-card">
             <h2 id="submit-title">Check the sheet</h2>
             <p>
-              {answered} answered, {test.questions.length - answered} blank, {flagged} flagged.
+              {answered} answered, {test.adaptive ? `${ahead} still ahead` : `${total - answered} blank`}, {flagged} flagged.
             </p>
             <p>There is no negative marking. A blank scores zero, and a wrong answer scores zero too, so attempt every question.</p>
             {saveError ? <p className="note">{saveError}</p> : null}

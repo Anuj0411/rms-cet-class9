@@ -57,7 +57,8 @@ function rational(i) {
   }
   if (kind === 2) {
     const p = 1 + (i % 4);
-    const q = 3 + shift;
+    let q = 3 + shift;
+    if (p >= q) q = p + 1;
     const r = 1 + ((i + 1) % 3);
     let s = 5 + (i % 4);
     if (s === q) s += 1;
@@ -72,8 +73,9 @@ function rational(i) {
     );
   }
   if (kind === 3) {
-    const p = 3 + (i % 4);
-    const q = 4 + shift;
+    let p = 3 + (i % 4);
+    let q = 4 + shift;
+    if (p >= q) q = p + 1;
     const r = 1 + (i % 3);
     const s = 2 + ((i + 2) % 4);
     const correct = frac(p * s - r * q, q * s);
@@ -198,17 +200,19 @@ function integers(i) {
     );
   }
   if (kind === 3) {
-    const a = (15 + (i % 9)) / 10;
-    const b = (25 + (i % 7)) / 10;
-    const sum = Math.round((a + b) * 100) / 100;
-    const correct = String(sum);
+    const rupees = 18 + (i % 12);
+    const paise = 15 + 5 * (i % 8);
+    const price = rupees + paise / 100;
+    const paid = rupees + 1;
+    const change = Math.round((paid - price) * 100) / 100;
+    const correct = change.toFixed(2);
     return mcq(
       id,
       i,
-      `Add ${a.toFixed(1)} + ${b.toFixed(1)}.`,
-      correct,
-      [String(Math.round((a + b) * 10) / 10 + 1), (a + b).toFixed(2) === correct ? String(sum + 0.1) : (a + b).toFixed(2), String(Math.round((a - b) * 10) / 10)],
-      `Line up the decimal points. ${a.toFixed(1)} + ${b.toFixed(1)} = ${correct}. The other options come from a shifted decimal, from subtracting, or from adding an extra tenth.`,
+      `A notebook costs ₹${price.toFixed(2)}. You pay with a ₹${paid} note. The change is`,
+      `₹${correct}`,
+      [`₹${(paid + price).toFixed(2)}`, `₹${price.toFixed(2)}`, `₹${(change + 0.1).toFixed(2)}`, `₹${(paise / 100).toFixed(2)}`, "₹1.00"],
+      `Change is the amount paid minus the cost. ₹${paid.toFixed(2)} − ₹${price.toFixed(2)} = ₹${correct}. Adding the note and the price, or stopping at the price, does not give the money handed back.`,
     );
   }
   if (kind === 4) {
@@ -256,19 +260,19 @@ function playing(i) {
     );
   }
   if (kind === 1) {
-    const n = 15 + i;
-    const correct = n % 2 === 0 ? "2" : "not by 2";
+    const a = 4 + (i % 5);
+    let b = 6 + (i % 4);
+    if (b === a) b += 3;
+    let c = 10 + (i % 5);
+    if (c === a || c === b) c += 3;
+    const l = (a * b / gcd(a, b) * c) / gcd(a * b / gcd(a, b), c);
     return mcq(
       id,
       i,
-      `Which of these is true about ${n}?`,
-      n % 2 === 0 ? `${n} is divisible by 2` : `${n} is not divisible by 2`,
-      [
-        n % 2 === 0 ? `${n} is not divisible by 2` : `${n} is divisible by 2`,
-        `${n} is divisible by 9`,
-        n % 5 === 0 ? `${n} is not divisible by 5` : `${n} is divisible by 5`,
-      ],
-      `A number is divisible by 2 when its last digit is even. The last digit of ${n} is ${n % 10}, so the true statement is the one about 2. Divisibility by 5 needs the last digit 0 or 5. Divisibility by 9 needs the digit sum to be a multiple of 9. ${correct === "2" ? `${n} is even.` : `${n} is odd.`}`,
+      `The smallest number divisible by ${a}, ${b} and ${c} is`,
+      String(l),
+      [String(a * b * c), String(a + b + c), String(Math.max(a, b, c)), String(l + a), String(a * b)],
+      `The smallest number that each of them divides is their LCM. The LCM of ${a}, ${b} and ${c} is ${l}. ${a * b * c} is a common multiple, but it still contains extra factors when the numbers share a factor. The sum and the largest of the three are not the least common multiple.`,
     );
   }
   if (kind === 2) {
@@ -279,10 +283,10 @@ function playing(i) {
     return mcq(
       id,
       i,
-      `The HCF of ${a} and ${b} is ${h}. Their LCM is`,
+      `The LCM of ${a} and ${b} is`,
       String(l),
-      [String(a * b), String(h), String(a + b)],
-      `For two whole numbers, HCF × LCM = product of the numbers. So LCM = ${a} × ${b} / ${h} = ${l}. ${a * b} is the product, which still contains the common factor. ${h} is the HCF, not the LCM. ${a + b} is the sum and is not used in this rule.`,
+      [String(h), String(a * b), String(a + b), String(l + h)],
+      `First find the HCF of ${a} and ${b}, which is ${h}. Then HCF × LCM = product of the numbers, so LCM = ${a} × ${b} / ${h} = ${l}. ${h} is the HCF, not the LCM. ${a * b} is the product and still contains the common factor. ${a + b} is the sum and is not used in this rule.`,
     );
   }
   if (kind === 3) {
@@ -306,20 +310,18 @@ function playing(i) {
       `Keep dividing by the smallest prime until you reach 1. ${n} = ${correct}. ${n} × 1 is not a prime factorisation because ${n} is not prime. Stopping early leaves a composite factor. The last option changes a factor, so the product is no longer ${n}.`,
     );
   }
-  const n = 100 + 10 * (i % 9) + (i % 4);
-  const last = n % 10;
-  const by5 = last === 0 || last === 5;
+  let a = 6 + (i % 7);
+  let b = 9 + (i % 6);
+  if (a === b) b += 3;
+  const h = gcd(a, b);
+  const l = (a * b) / h;
   return mcq(
     id,
     i,
-    `Is ${n} divisible by 5?`,
-    by5 ? "Yes, because the last digit is 0 or 5" : "No, because the last digit is not 0 or 5",
-    [
-      by5 ? "No, because the last digit is not 0 or 5" : "Yes, because the last digit is 0 or 5",
-      "Yes, because it is greater than 50",
-      "No, because it is even",
-    ],
-    `Divisibility by 5 depends only on the last digit. The last digit of ${n} is ${last}. ${by5 ? "That is 0 or 5, so it is divisible by 5." : "That is not 0 or 5, so it is not divisible by 5."} Being large, or being even, does not decide divisibility by 5.`,
+    `Two bells ring together at noon. One rings every ${a} minutes and the other every ${b} minutes. They next ring together after`,
+    `${l} minutes`,
+    [`${a + b} minutes`, `${a * b} minutes`, `${h} minutes`, `${l + a} minutes`, `${Math.abs(a - b)} minutes`],
+    `The bells ring together again after the LCM of the two gaps. The LCM of ${a} and ${b} is ${l} minutes. Adding the gaps, or taking their difference, does not give the next meeting. ${h} minutes is the HCF, the shared factor, not the next time they ring together. ${a * b} minutes is a later common multiple when the gaps share a factor.`,
   );
 }
 
@@ -369,14 +371,16 @@ function exponents(i) {
     );
   }
   if (kind === 3) {
-    const a = 3 + (i % 8);
+    const a = 2 + (Math.floor(i / 6) % 8);
+    const m = 2 + (i % 5);
+    const correct = `${a}^${m}`;
     return mcq(
       id,
       i,
-      `The value of ${a}^0 is`,
-      "1",
-      ["0", String(a), String(-1)],
-      `Any non-zero number to the power 0 is 1, so ${a}^0 = 1. It is not 0, and it is not the base itself. −1 would be a negative power or a sign error, not the zero-power rule.`,
+      `Simplify ${a}^${m} × ${a}^0.`,
+      correct,
+      ["1", `${a}^0`, `${a}^${m + 1}`, "0"],
+      `Any non-zero number to the power 0 is 1. Multiplying by 1 leaves the other factor, so ${a}^${m} × ${a}^0 = ${correct}. The answer is not 1, because ${a}^${m} is still there. ${a}^${m + 1} adds 1 to the power. A zero power does not turn the product into 0.`,
     );
   }
   if (kind === 4) {

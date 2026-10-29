@@ -8,6 +8,8 @@ import { Notes } from "./screens/Notes.tsx";
 import { Parent } from "./screens/Parent.tsx";
 import { PlanScreen } from "./screens/PlanScreen.tsx";
 import { Review } from "./screens/Review.tsx";
+import { Report } from "./screens/Report.tsx";
+import { Revise } from "./screens/Revise.tsx";
 import { TestScreen } from "./screens/Test.tsx";
 
 function usePath() {
@@ -51,12 +53,14 @@ export default function App() {
   const [role, setRole] = useState<Role | null>(() => getRole());
   const test = path.match(/^\/test\/([^/]+)$/);
   const review = path.match(/^\/review\/([^/]+)$/);
+  const revise = path === "/revise";
+  const report = path === "/report";
   const note = path.match(/^\/notes\/([^/]+)$/);
 
   useEffect(() => {
-    if (role !== "parent" || review) return;
+    if (role !== "parent" || review || revise || report) return;
     if (path !== "/" && path !== "/parent") window.location.hash = "#/";
-  }, [role, path, review]);
+  }, [role, path, review, revise, report]);
 
   if (!role) {
     return (
@@ -74,7 +78,11 @@ export default function App() {
   if (role === "parent") {
     const screen = review
       ? <Review attemptId={decodeURIComponent(review[1])} />
-      : <Parent />;
+      : revise
+        ? <Revise />
+        : report
+          ? <Report />
+          : <Parent />;
     return (
       <div className="app">
         <header className="top">
@@ -100,6 +108,8 @@ export default function App() {
   let screen = <Home />;
   if (test) screen = <TestScreen testId={decodeURIComponent(test[1])} />;
   else if (review) screen = <Review attemptId={decodeURIComponent(review[1])} />;
+  else if (revise) screen = <Revise />;
+  else if (report) screen = <Report />;
   else if (path === "/plan") screen = <PlanScreen />;
   else if (note) screen = <Notes topicId={decodeURIComponent(note[1])} />;
   else if (path === "/notes") screen = <Notes />;

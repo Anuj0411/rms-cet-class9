@@ -532,6 +532,19 @@ input, textarea {
 
 .lesson-head .lede { margin-bottom: 0; }
 
+.topic-meters { display: grid; gap: 12px; margin-top: 4px; }
+
+.topic-meter p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 4px;
+}
+
+.mark-line { margin: 8px 0 0; line-height: 1.5; }
+
+.mark-line b { font-weight: 500; }
+
 .note-list {
   margin: 0;
   padding: 0;
@@ -559,6 +572,14 @@ input, textarea {
   line-height: 1.4;
   letter-spacing: -0.02em;
 }
+
+.report-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-jump .button { min-height: 40px; padding: 8px 12px; }
 
 .note-num {
   flex: none;
@@ -780,6 +801,17 @@ input, textarea {
 .swatch.flag { background: #f6e4bc; }
 
 .question { display: grid; gap: 14px; }
+
+.coach {
+  margin: 0;
+  padding: 10px 12px;
+  background: #f7f1e6;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.coach strong { display: block; margin-bottom: 2px; }
 
 .stem {
   margin: 0;

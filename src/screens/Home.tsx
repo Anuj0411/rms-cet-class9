@@ -8,6 +8,7 @@ import { timeLeft } from "../time.ts";
 import type { Subject } from "../types.ts";
 import { langOf } from "../ui/lang.ts";
 import { Reminders } from "../ui/Reminders.tsx";
+import { YesterdayCard } from "../ui/Revision.tsx";
 import { TimeLeft } from "../ui/TimeLeft.tsx";
 
 const ORDER: Subject[] = ["maths", "science", "english", "hindi", "sst"];
@@ -34,6 +35,7 @@ function TargetCard({ entry, done, tint }: { entry: PlanEntry; done: boolean; ti
 
 export function Home() {
   const [name, setLocalName] = useState(getName());
+  const [naming, setNaming] = useState(() => getName().trim().length < 2);
   const [openSubject, setOpenSubject] = useState<Subject | null>(null);
   const today = istNow().day;
   const todayPlan = PLAN.filter((entry) => entry.date === today);
@@ -55,14 +57,26 @@ export function Home() {
   });
   const peak = Math.max(1, ...week.map((day) => day.count));
 
+  function keepName(value: string) {
+    const trimmed = value.trim();
+    setLocalName(trimmed);
+    setName(trimmed);
+    if (trimmed.length > 1) setNaming(false);
+  }
+
   const nameField = (
     <label className="field">
       Your name
       <input
         value={name}
-        onChange={(event) => {
-          setLocalName(event.target.value);
-          setName(event.target.value);
+        autoFocus
+        onChange={(event) => setLocalName(event.target.value)}
+        onBlur={(event) => keepName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            keepName(name);
+          }
         }}
         placeholder="Name used on the report"
         autoComplete="name"
@@ -85,12 +99,14 @@ export function Home() {
         <span>{percent}%</span>
       </div>
 
-      {!name.trim() ? (
+      {naming ? (
         <section className="card">
           <p className="lede">Add your name. It is the name on the score list.</p>
           {nameField}
         </section>
       ) : null}
+
+      {sync === "loading" ? null : <YesterdayCard attempts={attempts} today={today} />}
 
       {todayPlan.length ? (
         <div className="stack">

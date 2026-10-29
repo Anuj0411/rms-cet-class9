@@ -1,7 +1,9 @@
+import { reportAttempt } from "../analysis.ts";
 import { findQuestion, SUBJECT_LABEL, topicById } from "../catalog.ts";
 import { SyncLine } from "../SyncLine.tsx";
 import { useAttempts } from "../storage.ts";
 import { langOf } from "../ui/lang.ts";
+import { AttemptAnalysis } from "../ui/Revision.tsx";
 
 export function Review({ attemptId }: { attemptId: string }) {
   const { attempts, sync, error } = useAttempts();
@@ -62,8 +64,12 @@ export function Review({ attemptId }: { attemptId: string }) {
           </>
         )}
         <SyncLine sync={sync} error={error} />
-        <a className="button ghost" href="#/parent">Open the parent report</a>
+        <div className="target-actions">
+          <a className="button ghost" href="#/revise">Yesterday's revision</a>
+          <a className="button ghost" href="#/parent">Parent report</a>
+        </div>
       </section>
+      <AttemptAnalysis report={reportAttempt(attempt)} />
       {attempt.answers.map((answer, index) => {
         const question = findQuestion(answer.questionId);
         if (!question) return null;

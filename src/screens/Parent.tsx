@@ -8,6 +8,7 @@ import type { Attempt, OpenPaper, Subject } from "../types.ts";
 import { langOf } from "../ui/lang.ts";
 import { timeLeft } from "../time.ts";
 import { Reminders } from "../ui/Reminders.tsx";
+import { YesterdayCard } from "../ui/Revision.tsx";
 
 const ORDER: Subject[] = ["maths", "science", "english", "hindi", "sst"];
 
@@ -78,6 +79,14 @@ export function Parent() {
           <span>Topics tried</span>
         </div>
       </section>
+
+      <section className="card">
+        <h2>Detailed report</h2>
+        <p>Every question, then each test, then the full picture across Paper 1 and Paper 2.</p>
+        <a className="button block" href="#/report">Open the report</a>
+      </section>
+
+      {sync === "loading" ? null : <YesterdayCard attempts={attempts} today={today} />}
 
       <section className="card">
         <p className="eyebrow">{planDone} of {required.length} required tests</p>
@@ -188,7 +197,7 @@ export function Parent() {
               <Qualify label="Paper 2" score={attempt.paper2Score} total={attempt.paper2Total} />
             </div>
             <div className="row-actions">
-              <a className="button ghost" href={`#/review/${attempt.id}`}>See the answers</a>
+              <a className="button ghost" href={`#/review/${attempt.id}`}>Analysis</a>
               <button className="text-reset" type="button" onClick={() => { setResetError(""); setPending({ kind: "attempt", attempt }); }}>
                 Reset
               </button>
@@ -259,7 +268,7 @@ function AttemptList({ attempts, onReset }: { attempts: Attempt[]; onReset: (att
             </small>
           </span>
           <span className="row-actions">
-            <a href={`#/review/${attempt.id}`}>Answers</a>
+            <a href={`#/review/${attempt.id}`}>Analysis</a>
             <button className="text-reset" type="button" onClick={() => onReset(attempt)}>Reset</button>
           </span>
         </li>
