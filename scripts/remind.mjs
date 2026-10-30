@@ -27,6 +27,7 @@ function voidedAttemptIds(docs) {
   const ids = new Set();
   for (const document of docs) {
     const fields = document.fields ?? {};
+    if (value(fields.accountId) === "demo") continue;
     if (value(fields.kind) !== "attempt") continue;
     const attemptId = value(fields.attemptId);
     if (attemptId) ids.add(attemptId);
@@ -37,6 +38,7 @@ function voidedAttemptIds(docs) {
 function attempts(docs, voided) {
   return docs.flatMap((document) => {
     const fields = document.fields ?? {};
+    if (value(fields.accountId) === "demo") return [];
     const id = value(fields.id);
     if (id && voided.has(id)) return [];
     const testId = value(fields.testId);
@@ -48,6 +50,7 @@ function attempts(docs, voided) {
 function phones(docs) {
   return docs.flatMap((document) => {
     const fields = document.fields ?? {};
+    if (value(fields.accountId) === "demo") return [];
     const endpoint = value(fields.endpoint);
     const p256dh = value(fields.p256dh);
     const auth = value(fields.auth);

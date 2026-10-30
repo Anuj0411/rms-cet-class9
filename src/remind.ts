@@ -29,6 +29,20 @@ export function hasTopicNotes(testId: string | undefined) {
   return !!testId && /^(m|s|e|h|t)-/.test(testId);
 }
 
+export function planWatch(attempts: AttemptStamp[], today: string) {
+  const required = PLAN.filter((entry) => entry.required && entry.kind === "test" && entry.testId);
+  const remaining = required.filter((entry) => !isDone(entry, attempts, today));
+  const dates = [...new Set(
+    PLAN.filter((entry) => entry.kind === "test" && entry.date < today).map((entry) => entry.date),
+  )];
+  const sat = new Set(attempts.map((attempt) => istDay(attempt.submittedAt)));
+  return {
+    remaining,
+    late: remaining.filter((entry) => entry.date < today),
+    missingDays: dates.filter((day) => !sat.has(day)).sort(),
+  };
+}
+
 export function isDone(entry: PlanEntry, attempts: AttemptStamp[], day: string) {
   if (entry.kind !== "test" || !entry.testId) return false;
   const hits = attempts.filter((attempt) => attempt.testId === entry.testId);

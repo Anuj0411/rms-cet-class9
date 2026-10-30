@@ -62,6 +62,7 @@ export type Attempt = {
   paper2Score: number | null;
   paper2Total: number | null;
   answers: AnswerRecord[];
+  accountId?: string;
 };
 
 export type PaperReset = {
@@ -70,10 +71,11 @@ export type PaperReset = {
   testId: string;
   attemptId?: string;
   at: number;
+  accountId?: string;
 };
 
 export type OpenPaper = {
-  id: "current";
+  id: string;
   testId: string;
   title: string;
   startedAt: number;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getApps, initializeApp } from "firebase/app";
 import { collection, doc, getFirestore, onSnapshot, setDoc, type Firestore } from "firebase/firestore";
+import { getAccount, parentCode, type AccountId } from "./auth.ts";
 import type { Attempt, LiveTest, OpenPaper, PaperReset } from "./types.ts";
 
 const NAME = "rms-student-name";
@@ -11,6 +12,18 @@ const RESETS = "rmsResets";
 const OPEN_PAPER = "rmsLive";
 
 export const PARENT_PIN = "1947";
+
+function accountId(): AccountId {
+  return getAccount();
+}
+
+function scoped(key: string) {
+  return accountId() === "demo" ? `${key}-demo` : key;
+}
+
+function forThisAccount(owner: string | undefined) {
+  return accountId() === "demo" ? owner === "demo" : owner !== "demo";
+}
 
 export type SyncState = "loading" | "live" | "missing" | "error";
 
@@ -81,11 +94,11 @@ function firebaseDb() {
 }
 
 export function getName() {
-  return localStorage.getItem(NAME) ?? "";
+  return localStorage.getItem(scoped(NAME)) ?? "";
 }
 
 export function setName(name: string) {
-  localStorage.setItem(NAME, name.trim());
+  localStorage.setItem(scoped(NAME), name.trim());
 }
 
 export async function savePushSubscription(role: "student" | "parent", subscription: PushSubscription) {
@@ -98,13 +111,14 @@ export async function savePushSubscription(role: "student" | "parent", subscript
   if (!db) throw new Error("Reminders are not connected yet.");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint));
   const id = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 40);
-  await setDoc(doc(db, "rmsPush", id), { id, role, endpoint, p256dh, auth });
+  await setDoc(doc(db, "rmsPush", id), { id, role, endpoint, p256dh, auth, accountId: accountId() });
 }
 
 export async function saveOpenPaper(paper: Omit<OpenPaper, "id">) {
   const db = await firebaseDb();
   if (!db) return;
-  await setDoc(doc(db, OPEN_PAPER, "current"), { ...paper, id: "current" });
+  const id = accountId() === "demo" ? "demo" : "current";
+  await setDoc(doc(db, OPEN_PAPER, id), { ...paper, id });
 }
 
 export async function resetAttempt(attempt: Attempt) {
@@ -117,6 +131,7 @@ export async function resetAttempt(attempt: Attempt) {
     testId: attempt.testId,
     attemptId: attempt.id,
     at,
+    accountId: accountId(),
   });
 }
 
@@ -130,6 +145,7 @@ export async function resetOpenPaper(paper: OpenPaper) {
     kind: "live",
     testId: paper.testId,
     at,
+    accountId: accountId(),
   });
   await saveOpenPaper({ testId: paper.testId, title: paper.title, startedAt: paper.startedAt, open: false });
 }
@@ -139,17 +155,19 @@ export async function saveAttempt(attempt: Attempt) {
   if (!db) {
     throw new Error("This result was not saved. The score list is not connected, so nothing was kept on this phone.");
   }
-  await setDoc(doc(db, ATTEMPTS, attempt.id), attempt);
-  remembered.set(attempt.id, attempt);
+  const saved = { ...attempt, accountId: accountId() };
+  await setDoc(doc(db, ATTEMPTS, attempt.id), saved);
+  remembered.set(attempt.id, saved);
 }
 
 export function getLive(): LiveTest | null {
-  return read<LiveTest | null>(LIVE, null);
+  return read<LiveTest | null>(scoped(LIVE), null);
 }
 
 export function setLive(live: LiveTest | null) {
-  if (!live) localStorage.removeItem(LIVE);
-  else localStorage.setItem(LIVE, JSON.stringify(live));
+  const key = scoped(LIVE);
+  if (!live) localStorage.removeItem(key);
+  else localStorage.setItem(key, JSON.stringify(live));
 }
 
 export function parentUnlocked() {
@@ -157,7 +175,7 @@ export function parentUnlocked() {
 }
 
 export function unlockParent(pin: string) {
-  if (pin.trim() !== PARENT_PIN) return false;
+  if (pin.trim() !== parentCode()) return false;
   sessionStorage.setItem(PIN_OK, "yes");
   return true;
 }
@@ -217,8 +235,8 @@ export function useAttempts() {
     };
   }, []);
 
-  const hidden = hiddenAttemptIds(resets);
-  const attempts = rows.filter((attempt) => !hidden.has(attempt.id));
+  const hidden = hiddenAttemptIds(resets.filter((item) => forThisAccount(item.accountId)));
+  const attempts = rows.filter((attempt) => forThisAccount(attempt.accountId) && !hidden.has(attempt.id));
   return { attempts, sync, error };
 }
 
@@ -246,7 +264,7 @@ export function usePaperResets() {
     };
   }, []);
 
-  return { resets, ready };
+  return { resets: resets.filter((item) => forThisAccount(item.accountId)), ready };
 }
 
 export function useOpenPaper() {
@@ -262,7 +280,8 @@ export function useOpenPaper() {
         setReady(true);
         return;
       }
-      stop = onSnapshot(doc(db, OPEN_PAPER, "current"), (snap) => {
+      const id = accountId() === "demo" ? "demo" : "current";
+      stop = onSnapshot(doc(db, OPEN_PAPER, id), (snap) => {
         setPaper(snap.exists() ? (snap.data() as OpenPaper) : null);
         setReady(true);
       });

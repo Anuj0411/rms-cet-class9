@@ -1,6 +1,6 @@
 import { allTopics, SUBJECT_LABEL, topicAccuracy } from "../catalog.ts";
 import { formatDay, PLAN } from "../plan.ts";
-import { isDone, istNow, type AttemptStamp } from "../remind.ts";
+import { isDone, istNow, planWatch, type AttemptStamp } from "../remind.ts";
 import { SyncLine } from "../SyncLine.tsx";
 import { useState } from "react";
 import { resetAttempt, resetOpenPaper, useAttempts, useOpenPaper } from "../storage.ts";
@@ -33,6 +33,7 @@ export function Parent() {
   const topics = allTopics();
   const weak = stats.filter((row) => row.seen >= 4 && row.rate < 0.7).sort((a, b) => a.rate - b.rate);
   const missed = PLAN.filter((entry) => entry.required && entry.kind === "test" && entry.date < today && entry.testId && !isDone(entry, stamps, entry.date));
+  const watch = planWatch(stamps, today);
   const ahead = PLAN.filter((entry) => entry.date >= today).slice(0, 5);
   const mocks = attempts.filter((attempt) => attempt.testId.startsWith("mock-")).sort((a, b) => b.submittedAt - a.submittedAt);
   const recent = [...attempts].sort((a, b) => b.submittedAt - a.submittedAt).slice(0, 8);
@@ -93,7 +94,17 @@ export function Parent() {
         <div className="meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={planPercent} aria-label="Required plan finished">
           <i style={{ width: `${planPercent}%` }} />
         </div>
-        <p className="quiet">A result he submits on his phone appears here.</p>
+        {sync === "loading" ? null : (
+          <>
+            <p>{watch.remaining.length} required {watch.remaining.length === 1 ? "test is" : "tests are"} still left.</p>
+            {watch.missingDays.length === 0 ? (
+              <p>Every plan day so far has at least one submitted paper.</p>
+            ) : (
+              <p>{watch.missingDays.map((day) => formatDay(day)).join(", ")} — no paper was submitted.</p>
+            )}
+          </>
+        )}
+        <p className="quiet">A result he submits on his phone appears here, with the finish time and the seconds on each question.</p>
         <SyncLine sync={sync} error={error} audience="parent" />
       </section>
 
@@ -263,6 +274,15 @@ function AttemptList({ attempts, onReset }: { attempts: Attempt[]; onReset: (att
           <span lang={langOf(attempt.testTitle)}>
             {attempt.testTitle}
             <small>
+              Finished {new Date(attempt.submittedAt).toLocaleString("en-IN", {
+                timeZone: "Asia/Kolkata",
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+              {" · "}
               {attempt.score}/{attempt.total}
               {attempt.total ? ` · ${Math.round((attempt.score / attempt.total) * 100)}%` : ""}
             </small>

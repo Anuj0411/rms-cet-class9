@@ -209,6 +209,7 @@ export type TestBrief = {
   blanks: number;
   retake: boolean;
   earlier: string;
+  startedAt: number;
   line: string;
   subjects: { subject: Subject; correct: number; total: number }[];
   questions: QuestionLine[];
@@ -294,6 +295,7 @@ export function testBrief(attempt: Attempt, earlier: Attempt | null): TestBrief 
     blanks: report.blanks,
     retake: Boolean(earlier),
     earlier: earlier ? `${earlier.score}/${earlier.total}` : "",
+    startedAt: attempt.startedAt,
     line,
     subjects: [...subjects.entries()].map(([subject, tally]) => ({ subject, ...tally })),
     questions,

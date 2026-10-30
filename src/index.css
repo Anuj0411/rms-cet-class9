@@ -581,6 +581,8 @@ input, textarea {
 
 .report-jump .button { min-height: 40px; padding: 8px 12px; }
 
+.too-fast { color: var(--bad); font-weight: 500; }
+
 .note-num {
   flex: none;
   color: var(--accent);

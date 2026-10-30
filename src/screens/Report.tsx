@@ -1,17 +1,27 @@
 import { getRole } from "../auth.ts";
-import { fullReport, retakeOf, testBrief } from "../analysis.ts";
+import { fullReport, retakeOf, testBrief, type QuestionLine } from "../analysis.ts";
 import { SUBJECT_LABEL } from "../catalog.ts";
+import { formatDay, type PlanEntry } from "../plan.ts";
+import { istNow, planWatch } from "../remind.ts";
 import { SyncLine } from "../SyncLine.tsx";
 import { useAttempts } from "../storage.ts";
 import { langOf } from "../ui/lang.ts";
 
+const QUICK_SECONDS = 5;
+
 function when(at: number) {
   return new Date(at).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
     day: "numeric",
     month: "short",
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function veryQuick(question: QuestionLine) {
+  return question.correct && question.seconds < QUICK_SECONDS;
 }
 
 function jump(id: string) {
@@ -32,6 +42,11 @@ export function Report() {
     .sort((left, right) => right.submittedAt - left.submittedAt)
     .map((attempt) => testBrief(attempt, earlier.get(attempt.id) ?? null));
   const report = fullReport(attempts);
+  const today = istNow().day;
+  const watch = planWatch(
+    attempts.map((attempt) => ({ testId: attempt.testId, submittedAt: attempt.submittedAt })),
+    today,
+  );
 
   return (
     <div className="stack">
@@ -47,9 +62,44 @@ export function Report() {
         <button type="button" className="button ghost" onClick={() => jump("report-full")}>Full report</button>
       </div>
 
+      <section className="card" id="report-attendance">
+        <h2>Finished, left, and missed days</h2>
+        {sync === "loading" ? <p>Checking the saved papers.</p> : (
+          <>
+            <p>
+              {watch.remaining.length === 0
+                ? "No required test is left on the plan."
+                : `${watch.remaining.length} required ${watch.remaining.length === 1 ? "test is" : "tests are"} still left. ${watch.late.length} ${watch.late.length === 1 ? "is" : "are"} already late.`}
+            </p>
+            {watch.missingDays.length === 0 ? (
+              <p>Every plan day so far has at least one submitted paper.</p>
+            ) : (
+              <>
+                <p>These days have no submitted paper. A test done on another day does not fill the gap.</p>
+                <ul className="remain-list">
+                  {watch.missingDays.map((day) => (
+                    <li key={day}>
+                      <span>{formatDay(day)}</span>
+                      <strong>No paper</strong>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {watch.late.length ? (
+              <ul className="remain-list">
+                {watch.late.map((entry) => (
+                  <LateRow key={`${entry.date}-${entry.testId}`} entry={entry} />
+                ))}
+              </ul>
+            ) : null}
+          </>
+        )}
+      </section>
+
       <section className="card" id="report-questions">
         <h2>Question by question</h2>
-        <p className="quiet">Every saved answer. A miss is open. A correct answer stays closed until you tap it.</p>
+        <p className="quiet">The time is how long that question stayed on the screen. A correct answer under {QUICK_SECONDS} seconds is marked very quick.</p>
         {sync === "loading" && tests.length === 0 ? <p>Loading the saved papers.</p> : null}
         {tests.length === 0 && sync !== "loading" ? <p>No paper has been submitted yet.</p> : null}
         {tests.map((test) => (
@@ -58,7 +108,11 @@ export function Report() {
               <span lang={langOf(test.title)}>{test.title}</span>
               <small>{test.score}/{test.total}</small>
             </summary>
-            <p className="quiet">{when(test.submittedAt)}{test.retake ? " · immediate redo" : ""}</p>
+            <p>Finished {when(test.submittedAt)}{test.retake ? " · immediate redo" : ""}</p>
+            <p className="quiet">
+              Started {when(test.startedAt)} · {Math.round(test.durationSec / 60)} min {test.durationSec % 60} sec
+              {quickCount(test.questions) ? ` · ${quickCount(test.questions)} correct under ${QUICK_SECONDS} sec` : ""}
+            </p>
             {test.questions.map((question) => (
               <details
                 key={question.key}
@@ -66,7 +120,10 @@ export function Report() {
                 open={!question.correct}
               >
                 <summary>
-                  <span>{question.index + 1}. {statusOf(question.correct, question.blank, question.sameValue)}</span>
+                  <span className={veryQuick(question) ? "too-fast" : undefined}>
+                    {question.index + 1}. {statusOf(question.correct, question.blank, question.sameValue)} · {question.seconds}s
+                    {veryQuick(question) ? " · very quick" : ""}
+                  </span>
                   <small>{SUBJECT_LABEL[question.subject]}</small>
                 </summary>
                 <p className="stem" lang={langOf(question.stem)}>{question.stem}</p>
@@ -80,7 +137,10 @@ export function Report() {
                   )}
                 </p>
                 {question.rule ? <p className="why" lang={langOf(question.rule)}><strong>Why</strong>{question.rule}</p> : null}
-                <p className="quiet">{question.seconds} sec on this question</p>
+                <p className={veryQuick(question) ? "too-fast" : "quiet"}>
+                  {question.seconds} sec on this question
+                  {veryQuick(question) ? " · very quick for a correct answer" : ""}
+                </p>
               </details>
             ))}
           </details>
@@ -98,8 +158,9 @@ export function Report() {
                   {test.title}
                 </p>
                 <p className="quiet">
-                  {when(test.submittedAt)} · {test.percent}% · {Math.round(test.durationSec / 60)} min {test.durationSec % 60} sec
+                  Finished {when(test.submittedAt)} · {test.percent}% · {Math.round(test.durationSec / 60)} min {test.durationSec % 60} sec
                   {test.retake ? ` · redo of ${test.earlier}` : ""}
+                  {quickCount(test.questions) ? ` · ${quickCount(test.questions)} very quick` : ""}
                 </p>
                 <p>{test.line}</p>
                 <p className="quiet">
@@ -145,6 +206,19 @@ export function Report() {
         <a className="button ghost block" href="#/">Back to progress</a>
       </section>
     </div>
+  );
+}
+
+function quickCount(questions: QuestionLine[]) {
+  return questions.filter(veryQuick).length;
+}
+
+function LateRow({ entry }: { entry: PlanEntry }) {
+  return (
+    <li>
+      <span lang={langOf(entry.title)}>{entry.title}<small>{formatDay(entry.date)}</small></span>
+      <strong>Late</strong>
+    </li>
   );
 }
 

@@ -39,8 +39,8 @@ service cloud.firestore {
     }
     match /rmsLive/{id} {
       allow read: if true;
-      allow create, update: if id == "current"
-        && request.resource.data.id == "current"
+      allow create, update: if id in ["current", "demo"]
+        && request.resource.data.id == id
         && request.resource.data.testId is string
         && request.resource.data.testId.size() > 0
         && request.resource.data.testId.size() < 80
