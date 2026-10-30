@@ -194,6 +194,11 @@ export type QuestionLine = {
   blank: boolean;
   sameValue: boolean;
   seconds: number;
+  leaves: number;
+  awaySec: number;
+  selects: number;
+  shots: number;
+  watched: boolean;
   rule: string;
 };
 
@@ -210,6 +215,7 @@ export type TestBrief = {
   retake: boolean;
   earlier: string;
   startedAt: number;
+  watched: boolean;
   line: string;
   subjects: { subject: Subject; correct: number; total: number }[];
   questions: QuestionLine[];
@@ -272,6 +278,11 @@ export function testBrief(attempt: Attempt, earlier: Attempt | null): TestBrief 
       blank: answer.chosen === null,
       sameValue: card.sameValue,
       seconds: answer.seconds,
+      leaves: answer.leaves ?? 0,
+      awaySec: answer.awaySec ?? 0,
+      selects: answer.selects ?? 0,
+      shots: answer.shots ?? 0,
+      watched: answer.selects !== undefined,
       rule: answer.correct && !card.sameValue ? "" : card.rule,
     };
     return line;
@@ -296,10 +307,37 @@ export function testBrief(attempt: Attempt, earlier: Attempt | null): TestBrief 
     retake: Boolean(earlier),
     earlier: earlier ? `${earlier.score}/${earlier.total}` : "",
     startedAt: attempt.startedAt,
+    watched: questions.some((question) => question.watched),
     line,
     subjects: [...subjects.entries()].map(([subject, tally]) => ({ subject, ...tally })),
     questions,
   };
+}
+
+export function sittingChecks(rows: { leaves: number; selects: number; shots: number }[]) {
+  return {
+    leaves: rows.reduce((sum, row) => sum + row.leaves, 0),
+    selects: rows.reduce((sum, row) => sum + row.selects, 0),
+    shots: rows.reduce((sum, row) => sum + row.shots, 0),
+  };
+}
+
+const QUICK_SECONDS = 5;
+
+export function patternLines(questions: QuestionLine[], watched: boolean) {
+  const lines: string[] = [];
+  const quick = questions.filter((question) => question.correct && question.seconds < QUICK_SECONDS).length;
+  if (quick) lines.push(`${quick} correct ${quick === 1 ? "answer was" : "answers were"} under 5 seconds`);
+  if (!watched) return lines;
+  const checks = sittingChecks(questions);
+  if (checks.leaves) lines.push(`Left the screen ${countTimes(checks.leaves)}`);
+  if (checks.selects) lines.push(`Selected the question text ${countTimes(checks.selects)}`);
+  if (checks.shots) lines.push(`Screenshot shortcut ${countTimes(checks.shots)}`);
+  return lines;
+}
+
+function countTimes(count: number) {
+  return `${count} ${count === 1 ? "time" : "times"}`;
 }
 
 export function fullReport(attempts: Attempt[]): FullReport {

@@ -44,6 +44,10 @@ export type AnswerRecord = {
   correct: boolean;
   flagged: boolean;
   seconds: number;
+  leaves?: number;
+  awaySec?: number;
+  selects?: number;
+  shots?: number;
 };
 
 export type Attempt = {
@@ -92,4 +96,9 @@ export type LiveTest = {
   seconds: number[];
   tickAt: number;
   order?: number[];
+  away?: number[];
+  leaves?: number[];
+  selects?: number[];
+  shots?: number[];
+  hiddenAt?: number | null;
 };

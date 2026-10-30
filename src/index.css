@@ -583,6 +583,12 @@ input, textarea {
 
 .too-fast { color: var(--bad); font-weight: 500; }
 
+.latest-score { margin: 4px 0 12px; font-size: 1.7rem; font-weight: 500; }
+
+.pattern-list { margin: 0; padding-left: 1.15rem; color: var(--bad); }
+
+.pattern-list li { margin: 4px 0; }
+
 .note-num {
   flex: none;
   color: var(--accent);

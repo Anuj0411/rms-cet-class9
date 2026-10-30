@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { askCount, coachLine, extendLive, freshLive, liveFits, sameLive } from "../adapt.ts";
+import { afterChoice, askCount, bankTime, coachLine, extendLive, freshLive, isScreenshotKey, liveFits, markHidden, markShown, markTry, sameLive } from "../adapt.ts";
 import { resolveTest, splitScore, SUBJECT_LABEL, topicById } from "../catalog.ts";
 import { PAPER_BRIEF, TOPIC_NOTES } from "../notes/index.ts";
 import { getLive, getName, saveAttempt, saveOpenPaper, setLive, setName, useAttempts, usePaperResets } from "../storage.ts";
@@ -74,7 +74,9 @@ export function TestScreen({ testId }: { testId: string }) {
     if (!resetsReady) return;
     const now = liveRef.current;
     if (saved?.testId === testId && liveFits(saved, current)) {
-      if (!sameLive(now, saved)) setLocal(saved);
+      const settled = saved.hiddenAt && !document.hidden ? markShown(saved) : saved;
+      if (!sameLive(now, settled)) setLocal(settled);
+      if (settled !== saved) setLive(settled);
       return;
     }
     if (now?.testId === testId && liveFits(now, current)) return;
@@ -100,16 +102,77 @@ export function TestScreen({ testId }: { testId: string }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!live?.started) return;
+    const persist = (next: LiveTest) => {
+      liveRef.current = next;
+      setLocal(next);
+      setLive(next);
+    };
+    const hide = () => {
+      const current = liveRef.current;
+      if (!current?.started || submitted.current) return;
+      const next = markHidden(current);
+      if (next !== current) persist(next);
+    };
+    const show = () => {
+      const current = liveRef.current;
+      if (!current?.started || submitted.current) return;
+      const next = markShown(current);
+      if (next !== current) persist(next);
+    };
+    const onVisibility = () => {
+      if (document.hidden) hide();
+      else show();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", hide);
+    let lastShot = 0;
+    const noteTry = (kind: "selects" | "shots") => {
+      const current = liveRef.current;
+      if (!current?.started || submitted.current) return;
+      const next = markTry(current, kind);
+      if (next !== current) persist(next);
+    };
+    const onSelect = (event: Event) => {
+      const root = document.querySelector("article.question");
+      if (!(event.target instanceof Node) || !root?.contains(event.target)) return;
+      noteTry("selects");
+    };
+    const onShot = (event: KeyboardEvent) => {
+      if (!isScreenshotKey(event)) return;
+      const at = Date.now();
+      if (at - lastShot < 800) return;
+      lastShot = at;
+      noteTry("shots");
+    };
+    const onPrint = () => {
+      const at = Date.now();
+      if (at - lastShot < 800) return;
+      lastShot = at;
+      noteTry("shots");
+    };
+    document.addEventListener("selectstart", onSelect);
+    window.addEventListener("keydown", onShot);
+    window.addEventListener("keyup", onShot);
+    window.addEventListener("beforeprint", onPrint);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", hide);
+      document.removeEventListener("selectstart", onSelect);
+      window.removeEventListener("keydown", onShot);
+      window.removeEventListener("keyup", onShot);
+      window.removeEventListener("beforeprint", onPrint);
+    };
+  }, [live?.started]);
+
   function commit(next: LiveTest) {
     setLocal(next);
     setLive(next);
   }
 
   function flush(current: LiveTest) {
-    const extra = Math.max(0, Math.round((Date.now() - current.tickAt) / 1000));
-    const seconds = [...current.seconds];
-    seconds[current.index] += extra;
-    return { ...current, seconds, tickAt: Date.now() };
+    return bankTime(current);
   }
 
   async function finish(current: LiveTest) {
@@ -117,7 +180,7 @@ export function TestScreen({ testId }: { testId: string }) {
     submitted.current = true;
     setSaving(true);
     setSaveError("");
-    const finalLive = flush(current);
+    const finalLive = flush(markShown(current));
     const asked = finalLive.order ? finalLive.order.map((index) => test.questions[index]) : test.questions;
     const chosen = finalLive.chosen;
     const scored = splitScore(asked, chosen);
@@ -145,6 +208,10 @@ export function TestScreen({ testId }: { testId: string }) {
         correct: chosen[index] === question.answer,
         flagged: finalLive.flags[index],
         seconds: finalLive.seconds[index],
+        leaves: finalLive.leaves?.[index] ?? 0,
+        awaySec: finalLive.away?.[index] ?? 0,
+        selects: finalLive.selects?.[index] ?? 0,
+        shots: finalLive.shots?.[index] ?? 0,
       })),
     };
     try {
@@ -321,9 +388,8 @@ export function TestScreen({ testId }: { testId: string }) {
   const slots = session.order ?? test.questions.map((_, index) => index);
 
   function choose(option: number) {
-    const chosen = [...session.chosen];
-    chosen[session.index] = option;
-    commit({ ...session, chosen });
+    if (!test) return;
+    commit(afterChoice(session, option, test.questions, total, Boolean(test.adaptive)));
   }
 
   function jump(index: number) {

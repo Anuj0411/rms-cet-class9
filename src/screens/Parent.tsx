@@ -1,3 +1,4 @@
+import { sittingChecks } from "../analysis.ts";
 import { allTopics, SUBJECT_LABEL, topicAccuracy } from "../catalog.ts";
 import { formatDay, PLAN } from "../plan.ts";
 import { isDone, istNow, planWatch, type AttemptStamp } from "../remind.ts";
@@ -8,6 +9,7 @@ import type { Attempt, OpenPaper, Subject } from "../types.ts";
 import { langOf } from "../ui/lang.ts";
 import { timeLeft } from "../time.ts";
 import { Reminders } from "../ui/Reminders.tsx";
+import { LatestPaper } from "../ui/LatestPaper.tsx";
 import { YesterdayCard } from "../ui/Revision.tsx";
 
 const ORDER: Subject[] = ["maths", "science", "english", "hindi", "sst"];
@@ -63,6 +65,8 @@ export function Parent() {
           <h1>{name ? `${name}'s progress` : "Progress"}</h1>
         </div>
       </header>
+
+      <LatestPaper attempts={attempts} sync={sync} />
 
       <Reminders role="parent" />
 
@@ -265,6 +269,16 @@ function Qualify({ label, score, total }: { label: string; score: number | null;
   );
 }
 
+function checkNote(attempt: Attempt) {
+  if (!attempt.answers.some((answer) => answer.selects !== undefined)) return "";
+  const checks = sittingChecks(attempt.answers.map((answer) => ({
+    leaves: answer.leaves ?? 0,
+    selects: answer.selects ?? 0,
+    shots: answer.shots ?? 0,
+  })));
+  return ` · left ${checks.leaves} · selected ${checks.selects} · screenshot ${checks.shots}`;
+}
+
 function AttemptList({ attempts, onReset }: { attempts: Attempt[]; onReset: (attempt: Attempt) => void }) {
   if (attempts.length === 0) return <p>No test has been submitted yet.</p>;
   return (
@@ -285,6 +299,7 @@ function AttemptList({ attempts, onReset }: { attempts: Attempt[]; onReset: (att
               {" · "}
               {attempt.score}/{attempt.total}
               {attempt.total ? ` · ${Math.round((attempt.score / attempt.total) * 100)}%` : ""}
+              {checkNote(attempt)}
             </small>
           </span>
           <span className="row-actions">

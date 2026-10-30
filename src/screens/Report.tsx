@@ -1,11 +1,12 @@
 import { getRole } from "../auth.ts";
-import { fullReport, retakeOf, testBrief, type QuestionLine } from "../analysis.ts";
+import { fullReport, retakeOf, sittingChecks, testBrief, type QuestionLine } from "../analysis.ts";
 import { SUBJECT_LABEL } from "../catalog.ts";
 import { formatDay, type PlanEntry } from "../plan.ts";
 import { istNow, planWatch } from "../remind.ts";
 import { SyncLine } from "../SyncLine.tsx";
 import { useAttempts } from "../storage.ts";
 import { langOf } from "../ui/lang.ts";
+import { LatestPaper } from "../ui/LatestPaper.tsx";
 
 const QUICK_SECONDS = 5;
 
@@ -56,11 +57,38 @@ export function Report() {
           <h1>{report.studentName === "He" ? "Full report" : `${report.studentName}'s report`}</h1>
         </div>
       </header>
+      <LatestPaper attempts={attempts} sync={sync} />
       <div className="report-jump">
+        <button type="button" className="button ghost" onClick={() => jump("report-checks")}>Each test</button>
         <button type="button" className="button ghost" onClick={() => jump("report-questions")}>Questions</button>
         <button type="button" className="button ghost" onClick={() => jump("report-tests")}>Tests</button>
         <button type="button" className="button ghost" onClick={() => jump("report-full")}>Full report</button>
       </div>
+
+      <section className="card" id="report-checks">
+        <h2>Each test</h2>
+        <p className="quiet">Left the screen, selected the question text, and a screenshot shortcut or print. The screenshot buttons on the phone itself are not visible here.</p>
+        {sync === "loading" && tests.length === 0 ? <p>Checking the saved papers.</p> : null}
+        {tests.length === 0 && sync !== "loading" ? <p>No paper has been submitted yet.</p> : null}
+        {tests.length ? (
+          <ul className="remain-list">
+            {tests.map((test) => {
+              const checks = sittingChecks(test.questions);
+              const hot = test.watched && (checks.leaves > 0 || checks.selects > 0 || checks.shots > 0);
+              return (
+                <li key={test.id}>
+                  <span lang={langOf(test.title)}>
+                    {test.title}
+                    <small>Finished {when(test.submittedAt)}</small>
+                    <small>{checkLine(test.questions, test.watched)}</small>
+                  </span>
+                  <strong className={hot ? "too-fast" : undefined}>{hot ? "Look" : test.watched ? "None" : "Not recorded"}</strong>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </section>
 
       <section className="card" id="report-attendance">
         <h2>Finished, left, and missed days</h2>
@@ -99,7 +127,7 @@ export function Report() {
 
       <section className="card" id="report-questions">
         <h2>Question by question</h2>
-        <p className="quiet">The time is how long that question stayed on the screen. A correct answer under {QUICK_SECONDS} seconds is marked very quick.</p>
+        <p className="quiet">The time is how long that question stayed on this phone. Switching apps, going home, or closing the tab is marked as leaving. A correct answer under {QUICK_SECONDS} seconds is marked very quick. Another phone is not visible here.</p>
         {sync === "loading" && tests.length === 0 ? <p>Loading the saved papers.</p> : null}
         {tests.length === 0 && sync !== "loading" ? <p>No paper has been submitted yet.</p> : null}
         {tests.map((test) => (
@@ -112,6 +140,7 @@ export function Report() {
             <p className="quiet">
               Started {when(test.startedAt)} · {Math.round(test.durationSec / 60)} min {test.durationSec % 60} sec
               {quickCount(test.questions) ? ` · ${quickCount(test.questions)} correct under ${QUICK_SECONDS} sec` : ""}
+              {leftCount(test.questions) ? ` · left the screen on ${leftCount(test.questions)}` : ""}
             </p>
             {test.questions.map((question) => (
               <details
@@ -120,9 +149,11 @@ export function Report() {
                 open={!question.correct}
               >
                 <summary>
-                  <span className={veryQuick(question) ? "too-fast" : undefined}>
+                  <span className={veryQuick(question) || question.leaves > 0 || question.selects > 0 || question.shots > 0 ? "too-fast" : undefined}>
                     {question.index + 1}. {statusOf(question.correct, question.blank, question.sameValue)} · {question.seconds}s
                     {veryQuick(question) ? " · very quick" : ""}
+                    {awayLine(question)}
+                    {tryLine(question)}
                   </span>
                   <small>{SUBJECT_LABEL[question.subject]}</small>
                 </summary>
@@ -137,9 +168,11 @@ export function Report() {
                   )}
                 </p>
                 {question.rule ? <p className="why" lang={langOf(question.rule)}><strong>Why</strong>{question.rule}</p> : null}
-                <p className={veryQuick(question) ? "too-fast" : "quiet"}>
+                <p className={veryQuick(question) || question.leaves > 0 || question.selects > 0 || question.shots > 0 ? "too-fast" : "quiet"}>
                   {question.seconds} sec on this question
                   {veryQuick(question) ? " · very quick for a correct answer" : ""}
+                  {awayLine(question)}
+                  {tryLine(question)}
                 </p>
               </details>
             ))}
@@ -161,6 +194,7 @@ export function Report() {
                   Finished {when(test.submittedAt)} · {test.percent}% · {Math.round(test.durationSec / 60)} min {test.durationSec % 60} sec
                   {test.retake ? ` · redo of ${test.earlier}` : ""}
                   {quickCount(test.questions) ? ` · ${quickCount(test.questions)} very quick` : ""}
+                  {leftCount(test.questions) ? ` · left the screen on ${leftCount(test.questions)}` : ""}
                 </p>
                 <p>{test.line}</p>
                 <p className="quiet">
@@ -211,6 +245,33 @@ export function Report() {
 
 function quickCount(questions: QuestionLine[]) {
   return questions.filter(veryQuick).length;
+}
+
+function leftCount(questions: QuestionLine[]) {
+  return questions.filter((question) => question.leaves > 0).length;
+}
+
+function awayLine(question: QuestionLine) {
+  if (!question.leaves) return "";
+  const times = question.leaves === 1 ? "once" : `${question.leaves} times`;
+  return ` · left the screen ${times}, ${question.awaySec} sec away`;
+}
+
+function tryLine(question: QuestionLine) {
+  const parts = [];
+  if (question.selects) parts.push(question.selects === 1 ? "selected the question once" : `selected the question ${question.selects} times`);
+  if (question.shots) parts.push(question.shots === 1 ? "screenshot once" : `screenshot ${question.shots} times`);
+  return parts.length ? ` · ${parts.join(" · ")}` : "";
+}
+
+function checkLine(questions: QuestionLine[], watched: boolean) {
+  if (!watched) return "These checks were not on this paper.";
+  const checks = sittingChecks(questions);
+  return `Left the screen ${countTimes(checks.leaves)} · Selected the question ${countTimes(checks.selects)} · Screenshot ${countTimes(checks.shots)}`;
+}
+
+function countTimes(count: number) {
+  return `${count} ${count === 1 ? "time" : "times"}`;
 }
 
 function LateRow({ entry }: { entry: PlanEntry }) {
